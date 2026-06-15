@@ -4,8 +4,8 @@
 
 **Links**
 - Repo: https://github.com/kataenda/anna-research-digest
-- Live demo: _<your Coolify URL>_
-- Demo video: _<your video link>_
+- Live demo: https://annaresearch.soenic.com
+- Demo video: https://youtu.be/QdnF-ZqskO8
 
 ---
 

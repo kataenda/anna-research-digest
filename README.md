@@ -4,6 +4,8 @@
 
 Built for the **Anna AI-Native App Hackathon** (Jun 15–22, 2026).
 
+**▶️ [Live demo](https://annaresearch.soenic.com) · 🎬 [Demo video](https://youtu.be/QdnF-ZqskO8)**
+
 ---
 
 ## TL;DR for Judges
