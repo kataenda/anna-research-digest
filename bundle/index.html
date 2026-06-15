@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Research Digest AI</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- SIDEBAR: Saved Library -->
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <h3>Library</h3>
+        <span id="history-count">0 saved</span>
+      </div>
+      <div id="history-list">
+        <div class="history-empty">
+          No saved digests yet.<br>Research a topic and save it here.
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN PANEL -->
+    <main id="main">
+
+      <!-- Header -->
+      <header>
+        <div class="logo">
+          <div class="logo-icon">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
+            </svg>
+          </div>
+          <h1>Research Digest AI</h1>
+        </div>
+        <p class="tagline">AI-powered knowledge synthesis</p>
+      </header>
+
+      <!-- Search Panel -->
+      <section id="search-panel">
+        <div class="search-row">
+          <input
+            type="text"
+            id="topic-input"
+            placeholder="e.g. quantum entanglement, CRISPR gene editing, Byzantine fault tolerance..."
+            autocomplete="off"
+            spellcheck="false"
+          >
+          <button id="research-btn">Research</button>
+        </div>
+        <div class="depth-row">
+          <label>Depth:</label>
+          <div class="depth-options">
+            <button class="depth-btn" data-depth="quick">Quick</button>
+            <button class="depth-btn active" data-depth="standard">Standard</button>
+            <button class="depth-btn" data-depth="deep">Deep Dive</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Content Area -->
+      <div id="content">
+
+        <!-- Empty State -->
+        <div id="empty-state">
+          <div class="empty-icon">
+            <svg viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/>
+            </svg>
+          </div>
+          <h2>What do you want to learn?</h2>
+          <p>Enter any topic and get an instant structured knowledge digest — summary, key points, concepts, and related ideas.</p>
+          <div class="example-topics">
+            <span class="example-topic" data-topic="Large Language Models">Large Language Models</span>
+            <span class="example-topic" data-topic="Fermentation Science">Fermentation Science</span>
+            <span class="example-topic" data-topic="Byzantine Fault Tolerance">Byzantine Fault Tolerance</span>
+            <span class="example-topic" data-topic="Stoic Philosophy">Stoic Philosophy</span>
+            <span class="example-topic" data-topic="Photosynthesis">Photosynthesis</span>
+          </div>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" style="display:none;">
+          <div class="spinner"></div>
+          <p class="loading-topic" id="loading-topic">Synthesizing research...</p>
+          <p style="font-size:12px;color:var(--text-muted);">This takes a few seconds</p>
+        </div>
+
+        <!-- Digest View -->
+        <div id="digest-view">
+          <div id="error-banner" style="display:none;" class="error-banner">
+            <span id="error-msg"></span>
+            <button id="error-close">✕</button>
+          </div>
+
+          <div class="digest-header">
+            <div class="digest-title-block">
+              <h2 id="digest-title"></h2>
+              <div class="digest-meta">
+                <span id="digest-depth-tag" class="depth-tag"></span>
+                <span id="digest-time"></span>
+                <span id="digest-confidence" class="confidence-badge"></span>
+              </div>
+            </div>
+            <div class="review-actions">
+              <button class="btn-save" id="btn-save">Save to Library</button>
+              <button class="btn-discard" id="btn-discard">Discard</button>
+            </div>
+          </div>
+
+          <div class="cards-grid">
+            <div class="card card-summary">
+              <div class="card-label">Summary</div>
+              <p id="digest-summary"></p>
+            </div>
+            <div class="card card-points">
+              <div class="card-label">Key Points</div>
+              <ul id="digest-points"></ul>
+            </div>
+            <div class="card card-concepts">
+              <div class="card-label">Key Concepts</div>
+              <div id="digest-concepts"></div>
+            </div>
+            <div class="card card-related">
+              <div class="card-label">Related Topics</div>
+              <div class="related-tags" id="digest-related"></div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /content -->
+    </main>
+  </div>
+
+  <div id="toast">Saved to library</div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

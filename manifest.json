@@ -1,0 +1,46 @@
+{
+  "$schema": "https://anna.partners/schemas/app-manifest/v1.json",
+  "schema_version": 1,
+  "slug": "research-digest",
+  "permissions": [
+    "storage.read",
+    "storage.write",
+    "tools.invoke",
+    "chat.write_message"
+  ],
+  "required_executas": [
+    {
+      "type": "tool",
+      "id": "tool-kataenda-research-processor-kfj4mr5e",
+      "name": "research-processor"
+    },
+    {
+      "type": "skill",
+      "id": "skill-kataenda-research-coach-r6tq2m34",
+      "name": "research-coach"
+    }
+  ],
+  "ui": {
+    "bundle": {
+      "format": "static-spa",
+      "entry": "index.html"
+    },
+    "views": [
+      {
+        "id": "main",
+        "title": "Research Digest AI",
+        "geometry": {
+          "min": { "width": 480, "height": 580 },
+          "default": { "width": 820, "height": 700 },
+          "max": { "width": 1400, "height": 1000 }
+        }
+      }
+    ],
+    "host_api": {
+      "tools": ["tool-kataenda-research-processor-kfj4mr5e"],
+      "storage": ["get", "set"],
+      "chat": ["write_message"],
+      "window": ["set_title"]
+    }
+  }
+}

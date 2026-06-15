@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Local env / secrets
+.env
+.env.local
+*.key
+
+# Anna local state
+.anna/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+*.code-workspace

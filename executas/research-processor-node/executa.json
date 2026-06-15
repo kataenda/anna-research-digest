@@ -1,0 +1,5 @@
+{
+  "id": "tool-kataenda-research-processor-kfj4mr5e",
+  "enabled": true,
+  "run": "node index.js"
+}

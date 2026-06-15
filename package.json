@@ -1,0 +1,11 @@
+{
+  "name": "anna-research-digest",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node run-local.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
