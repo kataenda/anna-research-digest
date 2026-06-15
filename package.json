@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node run-local.js"
+    "dev": "node run-local.js",
+    "start": "node server.js",
+    "postinstall": "cd executas/research-processor-node && npm install --omit=dev"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -65,7 +65,9 @@ Built for the **Anna AI-Native App Hackathon** (Jun 15–22, 2026).
 anna-research-digest/
 ├── app.json                         # App metadata (slug, name, category)
 ├── manifest.json                    # Anna AppManifest v1 (permissions, views, host_api)
-├── run-local.js                     # Local dev server (serves bundle + proxies tool over stdio)
+├── server.js                        # Standalone web server (prod / Coolify) — serves UI + proxies tool
+├── run-local.js                     # Local dev entry (thin wrapper around server.js)
+├── Dockerfile                       # Production container image
 ├── package.json
 ├── bundle/                          # The App UI (static SPA — HTML/CSS/JS)
 │   ├── index.html                   # Layout: search panel, digest cards, library sidebar
@@ -122,6 +124,32 @@ Then open **http://localhost:3000** and research any topic.
 2. **Add your `ANTHROPIC_API_KEY`** to the Tool's credentials in Anna.
 3. **Upload the bundle** — create a new app version under *My Apps*, paste [`manifest.json`](manifest.json), and upload everything in [`bundle/`](bundle/) (the `mock-sdk.js` file is harmless but only used locally).
 4. **Install & open** the app from your Anna sidebar and start researching.
+
+---
+
+## Deploy to Production (Coolify / Docker)
+
+The repo also ships a standalone web server ([`server.js`](server.js)) so the app can run as a normal containerized web service — useful for a public live demo. It serves the UI, runs the `research-processor` plugin as a child process, and proxies tool calls over stdio (the Anna SDK is swapped for a local shim at runtime).
+
+**Coolify steps:**
+
+1. **New Resource → Application → Public/Private Repository** → point it at `https://github.com/kataenda/anna-research-digest`.
+2. **Build Pack: `Dockerfile`** (the repo includes a [`Dockerfile`](Dockerfile)). Nixpacks also works — `npm install` runs the plugin's deps via `postinstall`, and `npm start` launches the server.
+3. **Environment variables:**
+   - `ANTHROPIC_API_KEY` = your Claude API key *(required)*
+   - `PORT` = `3000` *(optional; Coolify usually sets this automatically)*
+4. **Port:** the app listens on `3000` (and binds `0.0.0.0`).
+5. **Health check path:** `/health` (returns `{"status":"ok"}`).
+6. **Deploy**, then attach your domain. Done.
+
+> **Note on persistence:** saved digests live in the container filesystem (`~/.anna/research-digest/state.json`). For the library to survive redeploys, mount a Coolify **persistent volume** at `/root/.anna`. For a demo this is optional.
+
+Run the same image locally:
+
+```bash
+docker build -t research-digest .
+docker run -p 3000:3000 -e ANTHROPIC_API_KEY=sk-ant-... research-digest
+```
 
 ---
 
