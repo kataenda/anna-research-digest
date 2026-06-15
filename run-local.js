@@ -83,6 +83,7 @@ const MIME = {
   '.js':   'application/javascript; charset=utf-8',
   '.css':  'text/css; charset=utf-8',
   '.svg':  'image/svg+xml',
+  '.png':  'image/png',
   '.json': 'application/json',
   '.ico':  'image/x-icon',
 };
@@ -143,6 +144,15 @@ const server = createServer(async (req, res) => {
 
   const ext  = extname(fullPath);
   const mime = MIME[ext] ?? 'text/plain';
+  const isText = /^(text\/|application\/(javascript|json)|image\/svg)/.test(mime);
+
+  if (!isText) {
+    // Binary assets (png, ico) — serve raw bytes, never decode as text
+    res.writeHead(200, { 'Content-Type': mime, ...cors });
+    res.end(readFileSync(fullPath));
+    return;
+  }
+
   let content = readFileSync(fullPath, 'utf8');
 
   // Inject import map right after <head> so mock SDK is used

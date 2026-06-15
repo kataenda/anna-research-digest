@@ -71,7 +71,9 @@ anna-research-digest/
 │   ├── index.html                   # Layout: search panel, digest cards, library sidebar
 │   ├── app.js                       # Anna SDK integration + render/review/save logic
 │   ├── style.css                    # Dark-theme UI
-│   ├── icon.svg                     # App icon
+│   ├── logo.png                     # App / header logo
+│   ├── favicon.ico                  # Favicon (+ favicon-16/32.png)
+│   ├── icon.svg                     # Legacy app icon
 │   └── mock-sdk.js                  # Local-only stand-in for the Anna SDK (not deployed)
 └── executas/
     ├── research-processor-node/     # The Tool (AI engine + storage)

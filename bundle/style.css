@@ -161,15 +161,16 @@ header {
 .logo { display: flex; align-items: center; gap: 10px; }
 
 .logo-icon {
-  width: 32px;
-  height: 32px;
-  background: linear-gradient(135deg, var(--accent), var(--purple));
+  width: 36px;
+  height: 36px;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 
+.logo-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .logo-icon svg { width: 18px; height: 18px; fill: white; }
 
 header h1 { font-size: 16px; font-weight: 700; color: var(--text); }
