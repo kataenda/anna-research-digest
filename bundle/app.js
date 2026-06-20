@@ -1,21 +1,42 @@
 import { AnnaAppRuntime } from '/static/anna-apps/_sdk/latest/index.js';
 
-// Resolved at publish time by Anna runtime; fallback lets us test locally
-// Prefer the host-injected resolved id; fall back to the bundled handle, which
-// the Anna host whitelists via manifest host_api.tools ("bundled:research-processor").
-const TOOL_ID = window.__ANNA_TOOL_IDS__?.['research-processor'] ?? 'bundled:research-processor';
+// This app "borrows" the Anna runtime: research synthesis uses the host LLM
+// (anna.llm.complete) and the library uses host storage (anna.storage).
+// No custom executa/tool is needed — everything runs through host APIs.
+const STORAGE_KEY = 'research-digest:digests';
+const DEPTHS = {
+  quick:    { points: 3, concepts: 3, instruction: 'Provide a quick overview.' },
+  standard: { points: 5, concepts: 5, instruction: 'Provide a thorough overview.' },
+  deep:     { points: 7, concepts: 7, instruction: 'Provide an in-depth analysis.' },
+};
 
 let anna = null;
 let currentDigest = null;
 let selectedDepth = 'standard';
 let isSaved = false;
 
+// Lightweight diagnostic logging (console only — no on-screen overlay).
+function dbg(msg) {
+  try { console.log('[RDG]', msg); } catch {}
+}
+
+function withTimeout(p, ms, label) {
+  return Promise.race([
+    p,
+    new Promise((_, rej) => setTimeout(() => rej(new Error(
+      `${label} timed out after ${ms / 1000}s — the tool ran but no LLM result came back. This usually means the Anna Agent is too old to relay sampling. Upgrade the Agent (⟲ on the executa card) and retry.`
+    )), ms)),
+  ]);
+}
+
 // ── INIT ─────────────────────────────────────────────────────────────────────
 async function init() {
+  dbg('init — build v0.5-hostllm (no executa)');
   try {
     anna = await AnnaAppRuntime.connect();
+    dbg('connected: anna=' + !!anna + ' llm=' + !!anna?.llm?.complete + ' storage=' + !!anna?.storage?.get);
   } catch (err) {
-    console.warn('Anna runtime not available — running in offline mode', err);
+    dbg('connect FAILED: ' + (err?.message || err));
   }
 
   setupListeners();
@@ -67,24 +88,85 @@ async function doResearch(topic, depth) {
   currentDigest = null;
 
   try {
-    const result = await invokeToolOrFallback('research', { topic, depth });
+    const result = await generateDigest(topic, depth);
     currentDigest = result;
     renderDigest(result);
     setWindowTitle(result.title);
   } catch (err) {
-    showError(err.message || 'Research failed. Check your API key.');
     showEmptyState();
+    showError(err.message || 'Research failed.');
   }
 }
 
-// ── TOOL INVOCATION ───────────────────────────────────────────────────────────
-async function invokeToolOrFallback(method, args) {
-  if (anna) {
-    const res = await anna.tools.invoke({ tool_id: TOOL_ID, method, args });
-    if (res?.error) throw new Error(res.error.message ?? JSON.stringify(res.error));
-    return res;
+// ── LLM SYNTHESIS (host runtime) ──────────────────────────────────────────────
+async function generateDigest(topic, depth) {
+  if (!anna?.llm?.complete) throw new Error('Anna runtime not connected. Please run inside Anna.');
+  const cfg = DEPTHS[depth] ?? DEPTHS.standard;
+  const systemPrompt = `You are a research analyst. Return ONLY valid JSON — no markdown fences, no extra text.
+The JSON must match this exact structure:
+{
+  "title": "string (Research Digest: <topic>)",
+  "summary": "string (2-3 sentences executive summary)",
+  "key_points": ["string", ...] (exactly ${cfg.points} points),
+  "concepts": [{"term": "string", "definition": "string (1-2 sentences)"}, ...] (exactly ${cfg.concepts} concepts),
+  "related_topics": ["string", "string", "string"] (exactly 3 suggestions),
+  "confidence": "high | medium | low"
+}`;
+  const userText = `${cfg.instruction} Research topic: "${topic}"`;
+
+  dbg('llm.complete → depth=' + depth + ' topic="' + topic + '"');
+  const res = await withTimeout(
+    anna.llm.complete({
+      messages: [{ role: 'user', content: { type: 'text', text: userText } }],
+      systemPrompt,
+      maxTokens: 1500,
+      includeContext: 'none',
+    }),
+    60000,
+    'llm.complete'
+  );
+  dbg('llm.complete ← ' + JSON.stringify(res ?? null).slice(0, 200));
+
+  // MCP-shaped result: { content: {type:'text', text} } | { content: [{text}] } | { text }
+  const c = res?.content;
+  let raw = '';
+  if (typeof c === 'string') raw = c;
+  else if (c && typeof c === 'object' && typeof c.text === 'string') raw = c.text;
+  else if (Array.isArray(c)) raw = c.map((p) => p?.text ?? '').join('');
+  else raw = res?.text ?? res?.completion ?? '';
+
+  raw = String(raw).replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  let digest;
+  try {
+    digest = JSON.parse(raw);
+  } catch {
+    throw new Error('Model did not return valid JSON. Got: ' + raw.slice(0, 160));
   }
-  throw new Error('Anna runtime not connected. Please run inside Anna.');
+  return {
+    ...digest,
+    id: `digest-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    topic,
+    depth,
+    generated_at: new Date().toISOString(),
+  };
+}
+
+// ── LIBRARY (host storage) ────────────────────────────────────────────────────
+async function loadDigests() {
+  if (!anna?.storage?.get) return [];
+  try {
+    const r = await anna.storage.get({ key: STORAGE_KEY });
+    const v = (r && typeof r === 'object' && 'value' in r) ? r.value : r;
+    return Array.isArray(v) ? v : [];
+  } catch (e) {
+    dbg('storage.get failed: ' + (e?.message || e));
+    return [];
+  }
+}
+
+async function saveDigests(arr) {
+  if (!anna?.storage?.set) throw new Error('Storage not available in this runtime.');
+  await anna.storage.set({ key: STORAGE_KEY, value: arr });
 }
 
 // ── SAVE / DISCARD ────────────────────────────────────────────────────────────
@@ -96,16 +178,22 @@ async function onSave() {
   btn.textContent = 'Saving...';
 
   try {
-    await invokeToolOrFallback('save_digest', { digest: currentDigest });
+    const arr = await loadDigests();
+    if (!arr.some((d) => d.id === currentDigest.id)) {
+      arr.unshift(currentDigest);
+      await saveDigests(arr.slice(0, 100));
+    }
     isSaved = true;
     btn.textContent = 'Saved!';
     showToast('Saved to library');
 
-    if (anna) {
-      await anna.chat.write_message({
-        role: 'assistant',
-        content: `Research digest saved: **${currentDigest.title}**. You can find it in your library anytime.`,
-      });
+    if (anna?.chat?.write_message) {
+      try {
+        await anna.chat.write_message({
+          role: 'assistant',
+          content: `Research digest saved: **${currentDigest.title}**. You can find it in your library anytime.`,
+        });
+      } catch {}
     }
 
     await loadHistory();
@@ -127,10 +215,9 @@ function onDiscard() {
 async function loadHistory() {
   if (!anna) return;
   try {
-    const { digests } = await invokeToolOrFallback('get_history', {});
-    renderHistory(digests ?? []);
+    renderHistory(await loadDigests());
   } catch (err) {
-    console.warn('Could not load history:', err);
+    dbg('loadHistory failed: ' + (err?.message || err));
   }
 }
 
@@ -139,7 +226,8 @@ async function deleteFromHistory(id, event) {
   if (!confirm('Remove this digest from your library?')) return;
 
   try {
-    await invokeToolOrFallback('delete_digest', { id });
+    const arr = (await loadDigests()).filter((d) => d.id !== id);
+    await saveDigests(arr);
     if (currentDigest?.id === id) {
       currentDigest = null;
       showEmptyState();
@@ -291,14 +379,23 @@ function resetBtn() {
 }
 
 function showError(msg) {
-  const banner = document.getElementById('error-banner');
-  document.getElementById('error-msg').textContent = msg;
-  banner.style.display = '';
+  let b = document.getElementById('global-error');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'global-error';
+    b.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:9999;max-width:92%;background:#4a1414;color:#ffd9d9;border:1px solid #b04141;padding:10px 16px;border-radius:8px;font-size:13px;line-height:1.4;box-shadow:0 6px 20px rgba(0,0,0,.45);cursor:pointer;white-space:pre-wrap';
+    b.title = 'Click to dismiss';
+    b.addEventListener('click', () => { b.style.display = 'none'; });
+    document.body.appendChild(b);
+  }
+  b.textContent = '⚠ ' + msg;
+  b.style.display = 'block';
   resetBtn();
 }
 
 function hideError() {
-  document.getElementById('error-banner').style.display = 'none';
+  const b = document.getElementById('global-error');
+  if (b) b.style.display = 'none';
 }
 
 function showToast(msg) {

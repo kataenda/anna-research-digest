@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "permissions": [
-    "tools.invoke",
+    "llm.complete",
     "chat.write_message",
     "storage.read",
     "storage.write",
@@ -9,16 +9,12 @@
   ],
   "required_executas": [
     {
-      "tool_id": "bundled:research-processor",
-      "version": "latest"
-    },
-    {
       "tool_id": "bundled:research-coach",
       "version": "latest"
     }
   ],
   "optional_executas": [],
-  "system_prompt_addendum": "The user has the Research Digest AI app open. Treat the research-processor Executa as the source of truth for digests: call it with method='research' and arguments {topic, depth} to generate a structured digest, method='get_history' to list the saved library, method='save_digest' with {digest} to persist an approved digest, and method='delete_digest' with {id} to remove one. Never auto-save — present the digest and let the user approve it first. The Research Coach skill defines tone, depth selection, and the human-review protocol; follow it when responding inside this app's window.",
+  "system_prompt_addendum": "The user has the Research Digest AI app open. The app generates structured research digests directly via the host LLM (anna.llm.complete) and stores approved digests via host storage. The Research Coach skill defines tone, depth selection, and the human-review protocol; follow it when responding inside this app's window. Never auto-save — present the digest and let the user approve it first.",
   "user_message_prefix_template": "[Research Digest] {user_message}",
   "tags": ["productivity", "research", "knowledge", "ai"],
   "ui": {
@@ -43,10 +39,10 @@
       }
     ],
     "host_api": {
-      "tools": ["required:bundled:research-processor"],
+      "tools": [],
       "chat": ["write_message"],
       "artifact": [],
-      "llm": [],
+      "llm": ["complete"],
       "fs": [],
       "storage": ["get", "set"],
       "prefs": [],

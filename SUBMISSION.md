@@ -19,21 +19,22 @@ Anyone who learns or researches fast: students, developers, analysts, and curiou
 
 ## How AI is used (meaningfully)
 
-The AI is the engine of every result, not a decoration. Claude (`claude-opus-4-8`) runs inside an Anna Tool and is constrained to return **strict, typed JSON**, which the UI renders as structured cards — i.e. AI producing structured app state. Depth control changes the synthesis, and a per-digest confidence level (high/medium/low) helps the human reviewer judge trustworthiness. A companion Anna Skill lets the same capability work conversationally in chat, including the human-review handoff.
+The AI is the engine of every result, not a decoration. The app **borrows the Anna AI runtime**: it calls the host LLM directly via `anna.llm.complete`, constrained to return **strict, typed JSON**, which the UI renders as structured cards — i.e. AI producing structured app state, not free-form text. Depth control changes the synthesis (3/5/7 points), and a per-digest confidence level (high/medium/low) helps the human reviewer judge trustworthiness. No third-party API key is needed — model selection, billing, and quota are owned by Anna. A companion Anna Skill lets the same capability work conversationally in chat, including the human-review handoff.
 
 ## How it connects to Anna
 
-Built natively on Anna primitives:
-- **App + Manifest (v1)** — UI bundle, permissions, views, `host_api`
-- **Tool (executa)** — `research-processor`, a JSON-RPC plugin (`research`, `get_history`, `save_digest`, `delete_digest`)
-- **Skill (executa)** — `research-coach`, in-chat behavior that drives the tool
-- **Runtime APIs** — `tools.invoke` (synthesis + library), `storage` (persistent digests), `chat.write_message` (save confirmation back to Anna chat)
-- **Permissions** — `storage.read`, `storage.write`, `tools.invoke`, `chat.write_message`
+Built natively on Anna primitives — the app runs entirely on host APIs, no custom backend:
+- **App + Manifest (schema v2)** — UI bundle, permissions, views, `host_api`
+- **Host LLM** — `anna.llm.complete` generates every digest (the "borrow an AI runtime" pattern)
+- **Host storage** — `anna.storage.get/set` persists the approved digest library
+- **Skill (executa)** — `research-coach`, a declarative `SKILL.md` that picks depth and enforces the human-review protocol in chat
+- **Host APIs** — `anna.chat.write_message` (save confirmation back to Anna chat), `anna.window.set_title`
+- **Permissions** — `llm.complete`, `storage.read`, `storage.write`, `chat.write_message`, `ui.svg`
 
 ## Why it fits the judging criteria
 
 - **Usefulness** — a real everyday research workflow with a persistent library
-- **Working demo** — runs end-to-end locally (`node run-local.js`) and as a deployed web service (Docker/Coolify)
-- **Meaningful AI** — structured generation + depth + confidence, core to the app
-- **Fit with Anna** — App + Manifest + Tool + Skill, using tools/storage/chat
+- **Working demo** — runs natively inside Anna (host LLM + storage) and as a standalone deployed web service (Docker/Coolify)
+- **Meaningful AI** — structured generation + depth + confidence, core to the app, powered by Anna's own LLM (no third-party key)
+- **Fit with Anna** — App + Manifest + Skill + host APIs (`llm.complete`, `storage`, `chat`); it borrows the Anna AI runtime instead of shipping its own backend
 - **Creativity & execution** — human-in-the-loop review, related-topic chaining, clean structured-card UI
