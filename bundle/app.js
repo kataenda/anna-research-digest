@@ -31,16 +31,47 @@ function withTimeout(p, ms, label) {
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
 async function init() {
-  dbg('init — build v0.5-hostllm (no executa)');
-  try {
-    anna = await AnnaAppRuntime.connect();
-    dbg('connected: anna=' + !!anna + ' llm=' + !!anna?.llm?.complete + ' storage=' + !!anna?.storage?.get);
-  } catch (err) {
-    dbg('connect FAILED: ' + (err?.message || err));
-  }
-
+  dbg('init — build v0.6-hostllm');
+  await connectWithRetry(4);
   setupListeners();
   await loadHistory();
+}
+
+// Anna occasionally serves a stale SDK on first load (intermittent "token version
+// mismatch"); retrying the handshake recovers it without a manual reload.
+async function connectWithRetry(tries) {
+  for (let i = 1; i <= tries; i++) {
+    try {
+      anna = await AnnaAppRuntime.connect();
+      dbg('connected (try ' + i + '): llm=' + !!anna?.llm?.complete + ' storage=' + !!anna?.storage?.get);
+      hideError();
+      return;
+    } catch (err) {
+      dbg('connect attempt ' + i + ' failed: ' + (err?.message || err));
+      if (i < tries) {
+        await new Promise((r) => setTimeout(r, 500 * i));
+      } else {
+        showReconnect();
+      }
+    }
+  }
+}
+
+function showReconnect() {
+  let b = document.getElementById('global-error');
+  if (!b) { showError(''); b = document.getElementById('global-error'); }
+  b.innerHTML = '⚠ Couldn\'t reach the Anna runtime. ';
+  const a = document.createElement('button');
+  a.textContent = 'Reconnect';
+  a.style.cssText = 'margin-left:8px;background:#b04141;color:#fff;border:0;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px';
+  a.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    b.textContent = 'Reconnecting…';
+    await connectWithRetry(3);
+    if (anna) { await loadHistory(); showToast('Reconnected'); }
+  });
+  b.appendChild(a);
+  b.style.display = 'block';
 }
 
 // ── EVENT WIRING ─────────────────────────────────────────────────────────────
