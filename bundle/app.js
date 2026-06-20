@@ -496,6 +496,22 @@ function downloadBlob(blob, filename) {
   }
 }
 
+// Anna's app iframe is sandboxed without `allow-downloads`, so a Blob download is
+// silently blocked. We attempt it, then gracefully fall back to copying the digest
+// as Markdown (clipboard works in-sandbox) so the button always does something useful.
+async function deliver(blob, filename, d) {
+  if (downloadBlob(blob, filename)) {
+    showToast(filename.split('.').pop().toUpperCase() + ' exported');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(digestToMarkdown(d));
+    showError('Downloads are blocked inside Anna’s sandbox — the digest was copied as Markdown instead (paste it into your doc). To download the actual PDF / Word / PPT file, open the live demo: annaresearch.soenic.com');
+  } catch {
+    showError('Downloads are blocked inside Anna’s sandbox. Open the live demo (annaresearch.soenic.com) to download PDF / Word / PPT files.');
+  }
+}
+
 function digestToMarkdown(d) {
   const out = [`# ${d.title || 'Research Digest'}`, ''];
   out.push(`*Confidence: ${d.confidence || '—'} · Depth: ${d.depth || 'standard'}*`, '');
@@ -526,11 +542,10 @@ async function copyMarkdown(d) {
   }
 }
 
-function exportWord(d) {
+async function exportWord(d) {
   const html = `<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>${escHtml(d.title || 'Research Digest')}</title></head><body style="font-family:Calibri,Arial,sans-serif;line-height:1.5">${digestToHtml(d)}</body></html>`;
   const blob = new Blob(['﻿' + html], { type: 'application/msword' });
-  if (downloadBlob(blob, safeName(d) + '.doc')) showToast('Word document exported');
-  else showError('Download is blocked by the runtime sandbox.');
+  await deliver(blob, safeName(d) + '.doc', d);
 }
 
 async function exportPDF(d) {
@@ -555,9 +570,7 @@ async function exportPDF(d) {
   write('Key Points', 14, 'bold'); (d.key_points || []).forEach((p) => write('•  ' + p, 11)); y += 10;
   write('Key Concepts', 14, 'bold'); (d.concepts || []).forEach((c) => write('•  ' + c.term + ' — ' + c.definition, 11)); y += 10;
   write('Related Topics', 14, 'bold'); write((d.related_topics || []).join(', '), 11);
-  if (downloadBlob(doc.output('blob'), safeName(d) + '.pdf')) { showToast('PDF exported'); return; }
-  try { doc.save(safeName(d) + '.pdf'); showToast('PDF exported'); }
-  catch { showError('Download is blocked by the runtime sandbox.'); }
+  await deliver(doc.output('blob'), safeName(d) + '.pdf', d);
 }
 
 async function exportPPT(d) {
@@ -589,9 +602,7 @@ async function exportPPT(d) {
   s.addText((d.related_topics || []).map((t) => ({ text: t, options: { bullet: true } })), { x: 0.6, y: 1.2, w: 12.1, h: 4.5, fontSize: 18, color: '363636' });
 
   const blob = await pptx.write('blob');
-  if (downloadBlob(blob, safeName(d) + '.pptx')) { showToast('PowerPoint exported'); return; }
-  try { await pptx.writeFile({ fileName: safeName(d) + '.pptx' }); showToast('PowerPoint exported'); }
-  catch { showError('Download is blocked by the runtime sandbox.'); }
+  await deliver(blob, safeName(d) + '.pptx', d);
 }
 
 // ── BOOT ─────────────────────────────────────────────────────────────────────
