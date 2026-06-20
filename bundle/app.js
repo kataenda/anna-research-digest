@@ -99,7 +99,17 @@ function setupListeners() {
 
   document.getElementById('btn-save').addEventListener('click', onSave);
   document.getElementById('btn-discard').addEventListener('click', onDiscard);
-  document.getElementById('error-close').addEventListener('click', hideError);
+  document.getElementById('error-close')?.addEventListener('click', hideError);
+
+  const onExport = (fn) => async () => {
+    if (!currentDigest) return;
+    try { await fn(currentDigest); }
+    catch (e) { showError('Export failed: ' + (e?.message || e)); }
+  };
+  document.getElementById('btn-export-pdf').addEventListener('click', onExport(exportPDF));
+  document.getElementById('btn-export-word').addEventListener('click', onExport(exportWord));
+  document.getElementById('btn-export-ppt').addEventListener('click', onExport(exportPPT));
+  document.getElementById('btn-export-md').addEventListener('click', onExport(copyMarkdown));
 }
 
 // ── RESEARCH ─────────────────────────────────────────────────────────────────
@@ -449,6 +459,139 @@ function escHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+// ── EXPORT (PDF / Word / PowerPoint / Markdown) ───────────────────────────────
+const _scripts = {};
+function loadScript(src) {
+  if (_scripts[src]) return _scripts[src];
+  _scripts[src] = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Could not load ' + src));
+    document.head.appendChild(s);
+  });
+  return _scripts[src];
+}
+
+function safeName(d) {
+  return String(d.topic || d.title || 'research-digest')
+    .replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 60).toLowerCase() || 'research-digest';
+}
+
+function downloadBlob(blob, filename) {
+  try {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1500);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function digestToMarkdown(d) {
+  const out = [`# ${d.title || 'Research Digest'}`, ''];
+  out.push(`*Confidence: ${d.confidence || '—'} · Depth: ${d.depth || 'standard'}*`, '');
+  out.push('## Summary', d.summary || '', '');
+  out.push('## Key Points', ...(d.key_points || []).map((p) => `- ${p}`), '');
+  out.push('## Key Concepts', ...(d.concepts || []).map((c) => `- **${c.term}** — ${c.definition}`), '');
+  out.push('## Related Topics', (d.related_topics || []).join(', '), '');
+  return out.join('\n');
+}
+
+function digestToHtml(d) {
+  return `<h1>${escHtml(d.title || 'Research Digest')}</h1>`
+    + `<p style="color:#666;font-style:italic">Confidence: ${escHtml(d.confidence || '—')} · Depth: ${escHtml(d.depth || 'standard')} · ${escHtml(new Date(d.generated_at || Date.now()).toLocaleString())}</p>`
+    + `<h2>Summary</h2><p>${escHtml(d.summary || '')}</p>`
+    + `<h2>Key Points</h2><ul>${(d.key_points || []).map((p) => `<li>${escHtml(p)}</li>`).join('')}</ul>`
+    + `<h2>Key Concepts</h2><ul>${(d.concepts || []).map((c) => `<li><b>${escHtml(c.term)}</b> — ${escHtml(c.definition)}</li>`).join('')}</ul>`
+    + `<h2>Related Topics</h2><p>${(d.related_topics || []).map(escHtml).join(', ')}</p>`;
+}
+
+async function copyMarkdown(d) {
+  const md = digestToMarkdown(d);
+  try {
+    await navigator.clipboard.writeText(md);
+    showToast('Markdown copied to clipboard');
+  } catch {
+    if (downloadBlob(new Blob([md], { type: 'text/markdown' }), safeName(d) + '.md')) showToast('Markdown downloaded');
+    else showError('Clipboard and download are both blocked by the runtime sandbox.');
+  }
+}
+
+function exportWord(d) {
+  const html = `<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>${escHtml(d.title || 'Research Digest')}</title></head><body style="font-family:Calibri,Arial,sans-serif;line-height:1.5">${digestToHtml(d)}</body></html>`;
+  const blob = new Blob(['﻿' + html], { type: 'application/msword' });
+  if (downloadBlob(blob, safeName(d) + '.doc')) showToast('Word document exported');
+  else showError('Download is blocked by the runtime sandbox.');
+}
+
+async function exportPDF(d) {
+  await loadScript('vendor/jspdf.umd.min.js');
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const margin = 48;
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const width = pageW - margin * 2;
+  let y = margin;
+  const ensure = (h) => { if (y + h > pageH - margin) { doc.addPage(); y = margin; } };
+  const write = (str, size, style, color) => {
+    doc.setFont('helvetica', style || 'normal');
+    doc.setFontSize(size);
+    doc.setTextColor(color || '#111111');
+    doc.splitTextToSize(String(str), width).forEach((ln) => { ensure(size * 1.4); doc.text(ln, margin, y); y += size * 1.4; });
+  };
+  write(d.title || 'Research Digest', 20, 'bold');
+  y += 4; write(`Confidence: ${d.confidence || '—'}   ·   Depth: ${d.depth || 'standard'}`, 10, 'italic', '#666666'); y += 12;
+  write('Summary', 14, 'bold'); write(d.summary || '', 11); y += 10;
+  write('Key Points', 14, 'bold'); (d.key_points || []).forEach((p) => write('•  ' + p, 11)); y += 10;
+  write('Key Concepts', 14, 'bold'); (d.concepts || []).forEach((c) => write('•  ' + c.term + ' — ' + c.definition, 11)); y += 10;
+  write('Related Topics', 14, 'bold'); write((d.related_topics || []).join(', '), 11);
+  if (downloadBlob(doc.output('blob'), safeName(d) + '.pdf')) { showToast('PDF exported'); return; }
+  try { doc.save(safeName(d) + '.pdf'); showToast('PDF exported'); }
+  catch { showError('Download is blocked by the runtime sandbox.'); }
+}
+
+async function exportPPT(d) {
+  await loadScript('vendor/pptxgen.bundle.js');
+  const PptxGen = window.PptxGenJS;
+  const pptx = new PptxGen();
+  pptx.layout = 'LAYOUT_WIDE';
+  const ACCENT = '7AA2F7';
+
+  let s = pptx.addSlide();
+  s.background = { color: '1A1B26' };
+  s.addText(d.title || 'Research Digest', { x: 0.5, y: 2.0, w: 12.3, h: 1.4, fontSize: 34, bold: true, color: 'FFFFFF', align: 'center' });
+  s.addText(`Confidence: ${d.confidence || '—'}   ·   Depth: ${d.depth || 'standard'}`, { x: 0.5, y: 3.5, w: 12.3, h: 0.5, fontSize: 14, color: 'A9B1D6', align: 'center' });
+
+  s = pptx.addSlide();
+  s.addText('Summary', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 26, bold: true, color: ACCENT });
+  s.addText(d.summary || '', { x: 0.5, y: 1.2, w: 12.3, h: 5, fontSize: 16, color: '363636' });
+
+  s = pptx.addSlide();
+  s.addText('Key Points', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 26, bold: true, color: ACCENT });
+  s.addText((d.key_points || []).map((p) => ({ text: p, options: { bullet: true } })), { x: 0.6, y: 1.2, w: 12.1, h: 5.6, fontSize: 16, color: '363636' });
+
+  s = pptx.addSlide();
+  s.addText('Key Concepts', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 26, bold: true, color: ACCENT });
+  s.addText((d.concepts || []).map((c) => ({ text: `${c.term}: ${c.definition}`, options: { bullet: true } })), { x: 0.6, y: 1.2, w: 12.1, h: 5.6, fontSize: 15, color: '363636' });
+
+  s = pptx.addSlide();
+  s.addText('Related Topics', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 26, bold: true, color: ACCENT });
+  s.addText((d.related_topics || []).map((t) => ({ text: t, options: { bullet: true } })), { x: 0.6, y: 1.2, w: 12.1, h: 4.5, fontSize: 18, color: '363636' });
+
+  const blob = await pptx.write('blob');
+  if (downloadBlob(blob, safeName(d) + '.pptx')) { showToast('PowerPoint exported'); return; }
+  try { await pptx.writeFile({ fileName: safeName(d) + '.pptx' }); showToast('PowerPoint exported'); }
+  catch { showError('Download is blocked by the runtime sandbox.'); }
 }
 
 // ── BOOT ─────────────────────────────────────────────────────────────────────

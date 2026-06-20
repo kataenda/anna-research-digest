@@ -369,6 +369,32 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--text); }
   flex-shrink: 0;
 }
 
+.export-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 14px;
+  flex-wrap: wrap;
+}
+.export-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-right: 2px;
+}
+.btn-export {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn-export:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-export:disabled { opacity: 0.5; cursor: default; }
+
 .btn-save {
   background: var(--green);
   color: #fff;
