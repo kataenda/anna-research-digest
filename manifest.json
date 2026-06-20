@@ -1,46 +1,69 @@
 {
-  "$schema": "https://anna.partners/schemas/app-manifest/v1.json",
-  "schema_version": 1,
-  "slug": "research-digest",
+  "schema": 2,
   "permissions": [
+    "tools.invoke",
+    "chat.write_message",
     "storage.read",
     "storage.write",
-    "tools.invoke",
-    "chat.write_message"
+    "ui.svg"
   ],
   "required_executas": [
     {
-      "type": "tool",
-      "id": "tool-kataenda-research-processor-kfj4mr5e",
-      "name": "research-processor"
+      "tool_id": "bundled:research-processor",
+      "min_version": "1.0.0",
+      "version": "latest"
     },
     {
-      "type": "skill",
-      "id": "skill-kataenda-research-coach-r6tq2m34",
-      "name": "research-coach"
+      "tool_id": "bundled:research-coach",
+      "version": "latest"
     }
   ],
+  "optional_executas": [],
+  "system_prompt_addendum": "The user has the Research Digest AI app open. Treat the research-processor Executa as the source of truth for digests: call it with method='research' and arguments {topic, depth} to generate a structured digest, method='get_history' to list the saved library, method='save_digest' with {digest} to persist an approved digest, and method='delete_digest' with {id} to remove one. Never auto-save — present the digest and let the user approve it first. The Research Coach skill defines tone, depth selection, and the human-review protocol; follow it when responding inside this app's window.",
+  "user_message_prefix_template": "[Research Digest] {user_message}",
+  "tags": ["productivity", "research", "knowledge", "ai"],
   "ui": {
     "bundle": {
       "format": "static-spa",
-      "entry": "index.html"
+      "entry": "index.html",
+      "external_origins": []
     },
     "views": [
       {
-        "id": "main",
+        "name": "main",
         "title": "Research Digest AI",
-        "geometry": {
-          "min": { "width": 480, "height": 580 },
-          "default": { "width": 820, "height": 700 },
-          "max": { "width": 1400, "height": 1000 }
-        }
+        "default": true,
+        "entry": "index.html",
+        "min_size": { "w": 480, "h": 580 },
+        "default_size": { "w": 820, "h": 700 },
+        "max_size": { "w": 1400, "h": 1000 },
+        "resizable": true,
+        "movable": true,
+        "single_instance": true,
+        "icon": "icon.svg"
       }
     ],
     "host_api": {
-      "tools": ["tool-kataenda-research-processor-kfj4mr5e"],
-      "storage": ["get", "set"],
+      "tools": ["required:bundled:research-processor"],
       "chat": ["write_message"],
+      "artifact": [],
+      "llm": [],
+      "fs": [],
+      "storage": ["get", "set"],
+      "prefs": [],
       "window": ["set_title"]
-    }
+    },
+    "csp_overrides": {
+      "img-src": ["'self'", "data:", "blob:"],
+      "font-src": ["'self'", "data:"],
+      "style-src": ["'self'"],
+      "script-src": ["'self'"]
+    },
+    "state_merge": "last_writer_wins"
+  },
+  "dev": {
+    "fixtures": ["fixtures/*.jsonl"],
+    "seed_storage": {},
+    "user_id": 1
   }
 }

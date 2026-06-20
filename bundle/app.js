@@ -1,4 +1,4 @@
-import { connect } from '/static/anna-apps/_sdk/latest/index.js';
+import { AnnaAppRuntime } from '/static/anna-apps/_sdk/latest/index.js';
 
 // Resolved at publish time by Anna runtime; fallback lets us test locally
 const TOOL_ID = window.__ANNA_TOOL_IDS__?.['research-processor'] ?? 'tool-kataenda-research-processor-kfj4mr5e';
@@ -11,7 +11,7 @@ let isSaved = false;
 // ── INIT ─────────────────────────────────────────────────────────────────────
 async function init() {
   try {
-    anna = await connect();
+    anna = await AnnaAppRuntime.connect();
   } catch (err) {
     console.warn('Anna runtime not available — running in offline mode', err);
   }
@@ -308,7 +308,7 @@ function showToast(msg) {
 
 async function setWindowTitle(title) {
   if (anna?.window?.set_title) {
-    try { await anna.window.set_title(title); } catch {}
+    try { await anna.window.set_title({ title }); } catch {}
   }
 }
 

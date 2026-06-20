@@ -1,5 +1,5 @@
 {
-  "id": "tool-kataenda-research-processor-kfj4mr5e",
-  "enabled": true,
-  "run": "node index.js"
+  "tool_id": "tool-kataenda-research-processor-kfj4mr5e",
+  "type": "node",
+  "enabled": true
 }
