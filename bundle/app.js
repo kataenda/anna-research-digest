@@ -44,7 +44,7 @@ function withTimeout(p, ms, label) {
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
 async function init() {
-  dbg('init — build v0.9-export-datapopup');
+  dbg('init — build v0.10-export-domclick');
   await connectWithRetry(4);
   setupListeners();
   await loadHistory();
@@ -521,15 +521,26 @@ async function saveBlob(blob, filename) {
     const w = window.open('', '_blank');
     if (!w) return false;
     const dataUrl = await blobToDataURL(blob);
-    w.document.write(
-      `<!DOCTYPE html><meta charset="utf-8"><title>${filename}</title>`
-      + `<body style="margin:0;font-family:system-ui,sans-serif;background:#16161e;color:#e6e6e6;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:16px">`
-      + `<div style="font-size:15px;opacity:.8">Your file is ready</div>`
-      + `<a id="dl" href="${dataUrl}" download="${filename}" style="background:#7aa2f7;color:#fff;padding:12px 22px;border-radius:9px;text-decoration:none;font-weight:700;font-size:14px">⬇ Download ${filename}</a>`
-      + `<div style="font-size:12px;opacity:.5">If it doesn’t start automatically, click the button.</div>`
-      + `<script>setTimeout(function(){document.getElementById('dl').click();},150);<\/script>`
-    );
-    w.document.close();
+    // Build the popup via DOM from this (self) script — no inline <script>, so the
+    // page CSP (script-src 'self') is not violated. Then auto-click the data-URL link.
+    const doc = w.document;
+    doc.title = filename;
+    doc.body.style.cssText = 'margin:0;font-family:system-ui,sans-serif;background:#16161e;color:#e6e6e6;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:16px';
+    const info = doc.createElement('div');
+    info.textContent = 'Your file is ready';
+    info.style.cssText = 'font-size:15px;opacity:.8';
+    const a = doc.createElement('a');
+    a.href = dataUrl;
+    a.download = filename;
+    a.textContent = '⬇ Download ' + filename;
+    a.style.cssText = 'background:#7aa2f7;color:#fff;padding:12px 22px;border-radius:9px;text-decoration:none;font-weight:700;font-size:14px';
+    const hint = doc.createElement('div');
+    hint.textContent = 'If the download doesn’t start, click the button above.';
+    hint.style.cssText = 'font-size:12px;opacity:.5';
+    doc.body.appendChild(info);
+    doc.body.appendChild(a);
+    doc.body.appendChild(hint);
+    a.click();
     return true;
   } catch {
     return false;
