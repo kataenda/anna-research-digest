@@ -44,7 +44,7 @@ function withTimeout(p, ms, label) {
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
 async function init() {
-  dbg('init — build v0.10-export-domclick');
+  dbg('init — build v0.11-export-clipboard');
   await connectWithRetry(4);
   setupListeners();
   await loadHistory();
@@ -571,13 +571,15 @@ async function copyRich(html, plain) {
 // version to the clipboard so the user pastes it straight into Word / Google Docs.
 async function deliver(blob, filename, d, pasteTarget) {
   const ext = filename.split('.').pop().toUpperCase();
-  if (await saveBlob(blob, filename)) {
-    showToast(SANDBOXED ? `${ext} ready in a new tab — download it there` : `${ext} downloaded`);
+  // Real file download only works at top level (live page). Anna's sandboxed iframe
+  // blocks downloads at every layer (even popups inherit the sandbox), so there we
+  // copy a richly-formatted version to the clipboard to paste into the target app.
+  if (!SANDBOXED && await saveBlob(blob, filename)) {
+    showToast(`${ext} downloaded`);
     return;
   }
-  // popups blocked too → last resort: clipboard
   const ok = await copyRich(digestToHtml(d), digestToMarkdown(d));
-  showToast(ok ? `Copied — paste into ${pasteTarget || 'your document'}` : 'Export unavailable in this runtime');
+  showToast(ok ? `Copied to clipboard — paste into ${pasteTarget || 'Word / Google Docs'} (Ctrl+V)` : 'Clipboard unavailable in this runtime');
 }
 
 function digestToMarkdown(d) {
@@ -613,7 +615,7 @@ async function copyMarkdown(d) {
 async function exportWord(d) {
   const html = `<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>${escHtml(d.title || 'Research Digest')}</title></head><body style="font-family:Calibri,Arial,sans-serif;line-height:1.5">${digestToHtml(d)}</body></html>`;
   const blob = new Blob(['﻿' + html], { type: 'application/msword' });
-  await deliver(blob, safeName(d) + '.doc', d);
+  await deliver(blob, safeName(d) + '.doc', d, 'Word or Google Docs');
 }
 
 async function exportPDF(d) {
@@ -638,7 +640,7 @@ async function exportPDF(d) {
   write('Key Points', 14, 'bold'); (d.key_points || []).forEach((p) => write('•  ' + p, 11)); y += 10;
   write('Key Concepts', 14, 'bold'); (d.concepts || []).forEach((c) => write('•  ' + c.term + ' — ' + c.definition, 11)); y += 10;
   write('Related Topics', 14, 'bold'); write((d.related_topics || []).join(', '), 11);
-  await deliver(doc.output('blob'), safeName(d) + '.pdf', d);
+  await deliver(doc.output('blob'), safeName(d) + '.pdf', d, 'Word or Google Docs');
 }
 
 async function exportPPT(d) {
@@ -670,7 +672,7 @@ async function exportPPT(d) {
   s.addText((d.related_topics || []).map((t) => ({ text: t, options: { bullet: true } })), { x: 0.6, y: 1.2, w: 12.1, h: 4.5, fontSize: 18, color: '363636' });
 
   const blob = await pptx.write('blob');
-  await deliver(blob, safeName(d) + '.pptx', d);
+  await deliver(blob, safeName(d) + '.pptx', d, 'PowerPoint or Google Slides');
 }
 
 // ── BOOT ─────────────────────────────────────────────────────────────────────
