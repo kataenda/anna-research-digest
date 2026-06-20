@@ -44,7 +44,7 @@ function withTimeout(p, ms, label) {
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
 async function init() {
-  dbg('init — build v0.8-export-newtab');
+  dbg('init — build v0.9-export-datapopup');
   await connectWithRetry(4);
   setupListeners();
   await loadHistory();
@@ -494,28 +494,44 @@ function safeName(d) {
     .replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 60).toLowerCase() || 'research-digest';
 }
 
+function blobToDataURL(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+}
+
 // Save a blob as a file. Top-level (live page): normal <a download>. Inside Anna's
-// sandboxed iframe, <a download> is blocked ('allow-downloads' unset) — but opening
-// the blob in a NEW top-level tab works (allow-popups), and the file downloads there.
-function saveBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
+// sandboxed iframe, <a download> is blocked ('allow-downloads' unset). We open a NEW
+// top-level tab (allow-popups) and write a self-contained page with a data-URL
+// download link that auto-clicks — this avoids blob: navigation that some browser
+// privacy/ad extensions block (ERR_BLOCKED_BY_CLIENT).
+async function saveBlob(blob, filename) {
   try {
     if (!SANDBOXED) {
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.rel = 'noopener';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      a.href = url; a.download = filename; a.rel = 'noopener';
+      document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
       return true;
     }
-    const w = window.open(url, '_blank', 'noopener');
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-    return !!w;
+    const w = window.open('', '_blank');
+    if (!w) return false;
+    const dataUrl = await blobToDataURL(blob);
+    w.document.write(
+      `<!DOCTYPE html><meta charset="utf-8"><title>${filename}</title>`
+      + `<body style="margin:0;font-family:system-ui,sans-serif;background:#16161e;color:#e6e6e6;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:16px">`
+      + `<div style="font-size:15px;opacity:.8">Your file is ready</div>`
+      + `<a id="dl" href="${dataUrl}" download="${filename}" style="background:#7aa2f7;color:#fff;padding:12px 22px;border-radius:9px;text-decoration:none;font-weight:700;font-size:14px">⬇ Download ${filename}</a>`
+      + `<div style="font-size:12px;opacity:.5">If it doesn’t start automatically, click the button.</div>`
+      + `<script>setTimeout(function(){document.getElementById('dl').click();},150);<\/script>`
+    );
+    w.document.close();
+    return true;
   } catch {
-    URL.revokeObjectURL(url);
     return false;
   }
 }
@@ -544,8 +560,8 @@ async function copyRich(html, plain) {
 // version to the clipboard so the user pastes it straight into Word / Google Docs.
 async function deliver(blob, filename, d, pasteTarget) {
   const ext = filename.split('.').pop().toUpperCase();
-  if (saveBlob(blob, filename)) {
-    showToast(SANDBOXED ? `${ext} opened in a new tab — save it from there` : `${ext} downloaded`);
+  if (await saveBlob(blob, filename)) {
+    showToast(SANDBOXED ? `${ext} ready in a new tab — download it there` : `${ext} downloaded`);
     return;
   }
   // popups blocked too → last resort: clipboard
@@ -578,7 +594,7 @@ async function copyMarkdown(d) {
     await navigator.clipboard.writeText(md);
     showToast('Markdown copied — paste into your editor');
   } catch {
-    if (saveBlob(new Blob([md], { type: 'text/markdown' }), safeName(d) + '.md')) showToast('Markdown opened in a new tab');
+    if (await saveBlob(new Blob([md], { type: 'text/markdown' }), safeName(d) + '.md')) showToast('Markdown ready in a new tab');
     else showError('Clipboard is unavailable in this runtime.');
   }
 }
