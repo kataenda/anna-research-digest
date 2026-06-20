@@ -1,0 +1,7 @@
+{
+  "slug": "research-coach",
+  "name": "Research Coach",
+  "version": "1.0.0",
+  "executa_type": "skill",
+  "description": "Conversational research protocol (depth selection, insight surfacing, human-review handoff) for the Research Digest AI Anna App. Declarative skill defined in SKILL.md."
+}

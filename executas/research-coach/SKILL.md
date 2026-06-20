@@ -1,5 +1,5 @@
 ---
-id: skill-kataenda-research-coach-r6tq2m34
+id: skill-kataenda-research-coach-cr6kdhsj
 name: research-coach
 version: "1.0"
 ---

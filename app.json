@@ -1,5 +1,16 @@
 {
   "slug": "research-digest",
   "name": "Research Digest AI",
-  "category": "productivity"
+  "version": "0.1.0",
+  "tagline": "Turn any topic into a structured, reviewable knowledge digest.",
+  "description": "Research Digest AI turns any topic into a clean, structured knowledge digest you can review, approve, and keep.\n\nEnter a topic and pick a depth (Quick / Standard / Deep Dive). Claude synthesizes it into four structured cards — Summary, Key Points, Key Concepts, and Related Topics — plus a confidence signal. You review and approve before anything is saved to your persistent library, and you can click a related topic to chain into the next digest.\n\n**What's inside**\n\n- A clean single-window UI (structured cards, dark theme, saved-library sidebar).\n- `research-processor` — an Executa stdio tool that calls Claude and returns strict, typed JSON.\n- `research-coach` — a declarative SKILL.md that picks depth and drives the tool with a human-review step.",
+  "category": "productivity",
+  "homepage_url": "https://github.com/kataenda/anna-research-digest",
+  "support_url": "https://github.com/kataenda/anna-research-digest/issues",
+  "logo_url": "https://annaresearch.soenic.com/logo.png",
+  "pricing_model": "free",
+  "bundled_executas": {
+    "research-processor": { "path": "./executas/research-processor-node" },
+    "research-coach": { "path": "./executas/research-coach" }
+  }
 }

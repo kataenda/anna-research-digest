@@ -1,7 +1,7 @@
 import { AnnaAppRuntime } from '/static/anna-apps/_sdk/latest/index.js';
 
 // Resolved at publish time by Anna runtime; fallback lets us test locally
-const TOOL_ID = window.__ANNA_TOOL_IDS__?.['research-processor'] ?? 'tool-kataenda-research-processor-kfj4mr5e';
+const TOOL_ID = window.__ANNA_TOOL_IDS__?.['research-processor'] ?? 'tool-kataenda-research-processor-s6r8v89w';
 
 let anna = null;
 let currentDigest = null;
