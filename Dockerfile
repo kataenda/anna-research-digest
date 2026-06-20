@@ -1,11 +1,12 @@
-# Research Digest AI — production image for Coolify (or any Docker host)
+# Research Digest AI — standalone host image for Coolify (or any Docker host)
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Install the research-processor plugin dependencies first (better layer caching)
-COPY executas/research-processor-node/package*.json ./executas/research-processor-node/
-RUN cd executas/research-processor-node && npm install --omit=dev
+# Install the standalone host dependencies first (better layer caching).
+# Only the host (server.js) needs deps; the Executa plugin uses Node builtins.
+COPY package*.json ./
+RUN npm install --omit=dev
 
 # Copy the rest of the app
 COPY . .
