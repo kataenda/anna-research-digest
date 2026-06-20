@@ -1,7 +1,9 @@
 import { AnnaAppRuntime } from '/static/anna-apps/_sdk/latest/index.js';
 
 // Resolved at publish time by Anna runtime; fallback lets us test locally
-const TOOL_ID = window.__ANNA_TOOL_IDS__?.['research-processor'] ?? 'tool-kataenda-research-processor-s6r8v89w';
+// Prefer the host-injected resolved id; fall back to the bundled handle, which
+// the Anna host whitelists via manifest host_api.tools ("bundled:research-processor").
+const TOOL_ID = window.__ANNA_TOOL_IDS__?.['research-processor'] ?? 'bundled:research-processor';
 
 let anna = null;
 let currentDigest = null;
