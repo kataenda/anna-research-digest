@@ -44,7 +44,7 @@ function withTimeout(p, ms, label) {
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
 async function init() {
-  dbg('init — build v0.12-export-download');
+  dbg('init — build v0.13-export-clipboard-final');
   await connectWithRetry(4);
   setupListeners();
   await loadHistory();
@@ -546,13 +546,20 @@ async function copyRich(html, plain) {
   try { await navigator.clipboard.writeText(plain); return true; } catch { return false; }
 }
 
-// Deliver an export. When a real file download is possible (top-level page) we save
-// the file; inside Anna's sandboxed iframe (no downloads) we copy a richly-formatted
-// version to the clipboard so the user pastes it straight into Word / Google Docs.
+// Anna's interface sandbox blocks file downloads (confirmed by Anna's own agent:
+// "the interface cannot push that file to your computer due to its sandbox security
+// settings" — the official workaround is copy/paste). So at top level we download a
+// real file; inside Anna we copy a richly-formatted version for pasting into the app.
 async function deliver(blob, filename, d, pasteTarget) {
   const ext = filename.split('.').pop().toUpperCase();
-  saveBlob(blob, filename);
-  showToast(`${ext} download started`);
+  if (!SANDBOXED && saveBlob(blob, filename)) {
+    showToast(`${ext} downloaded`);
+    return;
+  }
+  const ok = await copyRich(digestToHtml(d), digestToMarkdown(d));
+  showToast(ok
+    ? `Copied (formatted) — paste into ${pasteTarget || 'Word / Google Docs'} with Ctrl+V`
+    : 'Clipboard unavailable in this runtime');
 }
 
 function digestToMarkdown(d) {
