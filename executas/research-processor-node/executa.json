@@ -1,6 +1,7 @@
 {
   "slug": "research-processor",
-  "tool_id": "tool-kataenda-research-processor-kfj4mr5e",
+  "tool_id": "tool-kataenda-research-processor-s6r8v89w",
+  "version": "0.2.0",
   "type": "node",
   "enabled": true
 }

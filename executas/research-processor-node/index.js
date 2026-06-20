@@ -43,7 +43,7 @@ const sampling = new SamplingClient({ writeFrame });
 
 const MANIFEST = {
   display_name: 'Research Processor',
-  version: '0.1.0',
+  version: '0.2.0',
   description: 'AI-powered research digest generator. Synthesizes any topic into structured knowledge cards via host LLM sampling.',
   author: 'kataenda',
   host_capabilities: ['llm.sample'],

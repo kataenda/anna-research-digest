@@ -10,7 +10,6 @@
   "required_executas": [
     {
       "tool_id": "bundled:research-processor",
-      "min_version": "1.0.0",
       "version": "latest"
     },
     {
