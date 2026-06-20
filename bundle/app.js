@@ -44,7 +44,7 @@ function withTimeout(p, ms, label) {
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
 async function init() {
-  dbg('init — build v0.7-cachebust-sdk');
+  dbg('init — build v0.8-export-newtab');
   await connectWithRetry(4);
   setupListeners();
   await loadHistory();
@@ -494,36 +494,63 @@ function safeName(d) {
     .replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 60).toLowerCase() || 'research-digest';
 }
 
-function downloadBlob(blob, filename) {
+// Save a blob as a file. Top-level (live page): normal <a download>. Inside Anna's
+// sandboxed iframe, <a download> is blocked ('allow-downloads' unset) — but opening
+// the blob in a NEW top-level tab works (allow-popups), and the file downloads there.
+function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
   try {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.rel = 'noopener';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1500);
-    return true;
+    if (!SANDBOXED) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      return true;
+    }
+    const w = window.open(url, '_blank', 'noopener');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    return !!w;
   } catch {
+    URL.revokeObjectURL(url);
     return false;
   }
 }
 
-// Anna's app iframe is sandboxed without `allow-downloads`, so a Blob download is
-// silently blocked. We attempt it, then gracefully fall back to copying the digest
-// as Markdown (clipboard works in-sandbox) so the button always does something useful.
-async function deliver(blob, filename, d) {
-  if (downloadBlob(blob, filename)) {
-    showToast(filename.split('.').pop().toUpperCase() + ' exported');
+// Anna runs the app in a sandboxed iframe WITHOUT `allow-downloads`, where a Blob
+// download is silently blocked (a.click() does not throw). So we detect the iframe
+// up front and never rely on a download there — we use the clipboard instead, which
+// works in-sandbox. Standalone (live demo, top-level page) downloads real files.
+const SANDBOXED = (() => { try { return window.self !== window.top; } catch { return true; } })();
+
+async function copyRich(html, plain) {
+  try {
+    if (navigator.clipboard && window.ClipboardItem && html) {
+      await navigator.clipboard.write([new window.ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([plain], { type: 'text/plain' }),
+      })]);
+      return true;
+    }
+  } catch { /* fall through to plain text */ }
+  try { await navigator.clipboard.writeText(plain); return true; } catch { return false; }
+}
+
+// Deliver an export. When a real file download is possible (top-level page) we save
+// the file; inside Anna's sandboxed iframe (no downloads) we copy a richly-formatted
+// version to the clipboard so the user pastes it straight into Word / Google Docs.
+async function deliver(blob, filename, d, pasteTarget) {
+  const ext = filename.split('.').pop().toUpperCase();
+  if (saveBlob(blob, filename)) {
+    showToast(SANDBOXED ? `${ext} opened in a new tab — save it from there` : `${ext} downloaded`);
     return;
   }
-  try {
-    await navigator.clipboard.writeText(digestToMarkdown(d));
-    showError('Downloads are blocked inside Anna’s sandbox — the digest was copied as Markdown instead (paste it into your doc). To download the actual PDF / Word / PPT file, open the live demo: annaresearch.soenic.com');
-  } catch {
-    showError('Downloads are blocked inside Anna’s sandbox. Open the live demo (annaresearch.soenic.com) to download PDF / Word / PPT files.');
-  }
+  // popups blocked too → last resort: clipboard
+  const ok = await copyRich(digestToHtml(d), digestToMarkdown(d));
+  showToast(ok ? `Copied — paste into ${pasteTarget || 'your document'}` : 'Export unavailable in this runtime');
 }
 
 function digestToMarkdown(d) {
@@ -549,10 +576,10 @@ async function copyMarkdown(d) {
   const md = digestToMarkdown(d);
   try {
     await navigator.clipboard.writeText(md);
-    showToast('Markdown copied to clipboard');
+    showToast('Markdown copied — paste into your editor');
   } catch {
-    if (downloadBlob(new Blob([md], { type: 'text/markdown' }), safeName(d) + '.md')) showToast('Markdown downloaded');
-    else showError('Clipboard and download are both blocked by the runtime sandbox.');
+    if (saveBlob(new Blob([md], { type: 'text/markdown' }), safeName(d) + '.md')) showToast('Markdown opened in a new tab');
+    else showError('Clipboard is unavailable in this runtime.');
   }
 }
 
