@@ -44,7 +44,7 @@ function withTimeout(p, ms, label) {
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
 async function init() {
-  dbg('init — build v0.11-export-clipboard');
+  dbg('init — build v0.12-export-download');
   await connectWithRetry(4);
   setupListeners();
   await loadHistory();
@@ -508,39 +508,19 @@ function blobToDataURL(blob) {
 // top-level tab (allow-popups) and write a self-contained page with a data-URL
 // download link that auto-clicks — this avoids blob: navigation that some browser
 // privacy/ad extensions block (ERR_BLOCKED_BY_CLIENT).
-async function saveBlob(blob, filename) {
+// Trigger a real file download. Works at top level and inside Anna when the app's
+// iframe has been granted download permission. Returns false only on a thrown error.
+function saveBlob(blob, filename) {
   try {
-    if (!SANDBOXED) {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = filename; a.rel = 'noopener';
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 4000);
-      return true;
-    }
-    const w = window.open('', '_blank');
-    if (!w) return false;
-    const dataUrl = await blobToDataURL(blob);
-    // Build the popup via DOM from this (self) script — no inline <script>, so the
-    // page CSP (script-src 'self') is not violated. Then auto-click the data-URL link.
-    const doc = w.document;
-    doc.title = filename;
-    doc.body.style.cssText = 'margin:0;font-family:system-ui,sans-serif;background:#16161e;color:#e6e6e6;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:16px';
-    const info = doc.createElement('div');
-    info.textContent = 'Your file is ready';
-    info.style.cssText = 'font-size:15px;opacity:.8';
-    const a = doc.createElement('a');
-    a.href = dataUrl;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
     a.download = filename;
-    a.textContent = '⬇ Download ' + filename;
-    a.style.cssText = 'background:#7aa2f7;color:#fff;padding:12px 22px;border-radius:9px;text-decoration:none;font-weight:700;font-size:14px';
-    const hint = doc.createElement('div');
-    hint.textContent = 'If the download doesn’t start, click the button above.';
-    hint.style.cssText = 'font-size:12px;opacity:.5';
-    doc.body.appendChild(info);
-    doc.body.appendChild(a);
-    doc.body.appendChild(hint);
+    a.rel = 'noopener';
+    document.body.appendChild(a);
     a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
     return true;
   } catch {
     return false;
@@ -571,15 +551,8 @@ async function copyRich(html, plain) {
 // version to the clipboard so the user pastes it straight into Word / Google Docs.
 async function deliver(blob, filename, d, pasteTarget) {
   const ext = filename.split('.').pop().toUpperCase();
-  // Real file download only works at top level (live page). Anna's sandboxed iframe
-  // blocks downloads at every layer (even popups inherit the sandbox), so there we
-  // copy a richly-formatted version to the clipboard to paste into the target app.
-  if (!SANDBOXED && await saveBlob(blob, filename)) {
-    showToast(`${ext} downloaded`);
-    return;
-  }
-  const ok = await copyRich(digestToHtml(d), digestToMarkdown(d));
-  showToast(ok ? `Copied to clipboard — paste into ${pasteTarget || 'Word / Google Docs'} (Ctrl+V)` : 'Clipboard unavailable in this runtime');
+  saveBlob(blob, filename);
+  showToast(`${ext} download started`);
 }
 
 function digestToMarkdown(d) {
