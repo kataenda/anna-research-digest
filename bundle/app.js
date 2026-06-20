@@ -223,8 +223,8 @@ async function loadHistory() {
 
 async function deleteFromHistory(id, event) {
   event.stopPropagation();
-  if (!confirm('Remove this digest from your library?')) return;
-
+  // Note: window.confirm() is blocked inside Anna's sandboxed iframe, so we
+  // delete directly and surface a toast (undo-free, single-click remove).
   try {
     const arr = (await loadDigests()).filter((d) => d.id !== id);
     await saveDigests(arr);
@@ -233,6 +233,7 @@ async function deleteFromHistory(id, event) {
       showEmptyState();
     }
     await loadHistory();
+    showToast('Removed from library');
   } catch (err) {
     showError('Failed to delete: ' + err.message);
   }
