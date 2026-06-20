@@ -6,9 +6,6 @@
     "dev": "node run-local.js",
     "start": "node server.js"
   },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0"
-  },
   "engines": {
     "node": ">=18.0.0"
   }

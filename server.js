@@ -1,15 +1,18 @@
 /**
  * Standalone host for Research Digest AI (web deployment, e.g. Coolify / local).
  *
- * In production on Anna, the platform provides the LLM via reverse
- * `sampling/createMessage` and the plugin holds no API key. This server
- * emulates that host role for STANDALONE deployment:
+ * Inside Anna the app "borrows the Anna runtime": it calls the host LLM via
+ * `anna.llm.complete` and persists via `anna.storage`. This server emulates that
+ * host role for STANDALONE deployment so the same bundle/ UI runs as a normal
+ * web app:
  *   - Serves the bundle/ UI
- *   - Spawns the research-processor plugin (Executa protocol v2 over stdio)
- *   - Translates /invoke POST → plugin `invoke {tool, arguments}` (unwraps data)
- *   - Acts as the SAMPLING HOST: answers the plugin's `sampling/createMessage`
- *     requests by calling the Claude API with ANTHROPIC_API_KEY
+ *   - Injects an import map so the Anna SDK import resolves to bundle/mock-sdk.js
+ *   - Implements POST /llm — the stand-in for anna.llm.complete — by calling the
+ *     Claude API with ANTHROPIC_API_KEY and returning an MCP-shaped completion
  *   - Exposes /health for container health checks
+ *
+ * (Storage in standalone mode lives in the browser via localStorage — see
+ * mock-sdk.js — so no server-side persistence is required.)
  *
  * Env:
  *   ANTHROPIC_API_KEY  (required) — used only by this standalone LLM host
@@ -21,127 +24,58 @@
 
 import { createServer } from 'http';
 import { readFileSync, existsSync } from 'fs';
-import { spawn } from 'child_process';
 import { join, extname } from 'path';
 import { fileURLToPath } from 'url';
-import Anthropic from '@anthropic-ai/sdk';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const BUNDLE_DIR = join(__dirname, 'bundle');
-const PLUGIN_DIR = join(__dirname, 'executas', 'research-processor-node');
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const MODEL = process.env.ANNA_LOCAL_MODEL || 'claude-opus-4-8';
 
-// ── LLM HOST (stands in for Anna's sampling provider) ──────────────────────────
 if (!process.env.ANTHROPIC_API_KEY) {
   console.error('\n  ERROR: ANTHROPIC_API_KEY is not set (needed by the standalone LLM host).');
   console.error('  On the Anna platform this is NOT needed — Anna provides the LLM.');
   console.error('  For standalone/Coolify, set ANTHROPIC_API_KEY and redeploy.\n');
   process.exit(1);
 }
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-// ── SPAWN PLUGIN ─────────────────────────────────────────────────────────────
-const plugin = spawn('node', ['index.js'], {
-  cwd: PLUGIN_DIR,
-  env: { ...process.env },
-  stdio: ['pipe', 'pipe', 'inherit'],
-});
-plugin.on('error', (err) => {
-  console.error('Plugin failed to start:', err.message);
-  process.exit(1);
-});
-plugin.on('exit', (code) => {
-  console.error(`Plugin process exited with code ${code}. Shutting down.`);
-  process.exit(code ?? 1);
-});
+// ── LLM HOST (stands in for anna.llm.complete) ─────────────────────────────────
+// Accepts the same args the frontend sends to anna.llm.complete
+// ({ messages, systemPrompt, maxTokens }) and returns an MCP-shaped result
+// ({ content: { type: 'text', text } }) — identical to what Anna's runtime returns.
+async function llmComplete({ messages, systemPrompt, maxTokens }) {
+  const userText = (messages || [])
+    .map((m) => {
+      const c = m?.content;
+      if (typeof c === 'string') return c;
+      if (Array.isArray(c)) return c.map((b) => b?.text ?? '').join('');
+      return c?.text ?? '';
+    })
+    .join('\n');
 
-let reqId = 0;
-const pending = new Map();
-let lineBuffer = '';
-
-function sendToPlugin(frame) {
-  plugin.stdin.write(JSON.stringify(frame) + '\n');
-}
-
-// Answer the plugin's reverse sampling request by calling Claude.
-async function handleSampling(msg) {
-  const p = msg.params || {};
-  try {
-    const userText = (p.messages || [])
-      .map((m) => (m.content && m.content.text) || '')
-      .join('\n');
-    const resp = await anthropic.messages.create({
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': process.env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
       model: MODEL,
-      max_tokens: p.maxTokens || 1024,
-      ...(p.systemPrompt ? { system: p.systemPrompt } : {}),
+      max_tokens: maxTokens || 1500,
+      ...(systemPrompt ? { system: systemPrompt } : {}),
       messages: [{ role: 'user', content: userText }],
-    });
-    const text = resp.content?.[0]?.text ?? '';
-    sendToPlugin({
-      jsonrpc: '2.0',
-      id: msg.id,
-      result: {
-        content: { type: 'text', text },
-        model: resp.model,
-        usage: resp.usage,
-        stopReason: resp.stop_reason,
-      },
-    });
-  } catch (err) {
-    sendToPlugin({
-      jsonrpc: '2.0',
-      id: msg.id,
-      error: { code: -32003, message: `LLM host error: ${err.message}` },
-    });
-  }
-}
-
-plugin.stdout.on('data', (chunk) => {
-  lineBuffer += chunk.toString();
-  let nl;
-  while ((nl = lineBuffer.indexOf('\n')) !== -1) {
-    const line = lineBuffer.slice(0, nl).trim();
-    lineBuffer = lineBuffer.slice(nl + 1);
-    if (!line) continue;
-    let msg;
-    try { msg = JSON.parse(line); } catch { continue; }
-
-    // Reverse request FROM the plugin (wants the host to sample an LLM).
-    if (msg.method === 'sampling/createMessage') {
-      handleSampling(msg);
-      continue;
-    }
-    // Otherwise: a response to one of OUR requests.
-    const cb = pending.get(msg.id);
-    if (cb) { pending.delete(msg.id); cb(msg); }
-  }
-});
-
-function rpc(method, params, timeoutMs = 90_000) {
-  return new Promise((resolve, reject) => {
-    const id = ++reqId;
-    const timer = setTimeout(() => {
-      pending.delete(id);
-      reject(new Error(`Plugin timeout on "${method}"`));
-    }, timeoutMs);
-    pending.set(id, (msg) => { clearTimeout(timer); resolve(msg); });
-    sendToPlugin({ jsonrpc: '2.0', id, method, params: params ?? {} });
+    }),
   });
-}
 
-// Negotiate protocol v2 so the plugin enables host sampling.
-rpc('initialize', { protocolVersion: '2.0' }).catch(() => {});
-
-// Translate a browser tool call → plugin invoke, returning the unwrapped data
-// (mirrors how Anna unwraps {success, data} → data).
-async function invokeTool(method, args) {
-  const msg = await rpc('invoke', { tool: method, arguments: args ?? {} });
-  if (msg.error) throw new Error(msg.error.message ?? 'Plugin error');
-  const r = msg.result ?? {};
-  if (r.success === false) throw new Error(r.error ?? 'Tool failed');
-  return r.data ?? r;
+  if (!r.ok) {
+    const t = await r.text().catch(() => '');
+    throw new Error(`Anthropic API ${r.status}: ${t.slice(0, 200)}`);
+  }
+  const data = await r.json();
+  const text = (data.content || []).map((b) => b.text || '').join('');
+  return { content: { type: 'text', text }, model: data.model, stopReason: data.stop_reason };
 }
 
 // ── STATIC FILE MIME TYPES ───────────────────────────────────────────────────
@@ -175,16 +109,17 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === 'POST' && url.pathname === '/invoke') {
+  // POST /llm — stand-in for anna.llm.complete
+  if (req.method === 'POST' && url.pathname === '/llm') {
     let body = '';
     req.on('data', (c) => (body += c));
     req.on('end', async () => {
       try {
-        const { method, args } = JSON.parse(body);
-        console.log(`  [invoke] ${method}`, JSON.stringify(args ?? {}).slice(0, 80));
-        const data = await invokeTool(method, args ?? {});
+        const args = JSON.parse(body || '{}');
+        console.log('  [llm] complete', JSON.stringify(args.messages?.[0]?.content ?? '').slice(0, 80));
+        const result = await llmComplete(args);
         res.writeHead(200, { 'Content-Type': 'application/json', ...cors });
-        res.end(JSON.stringify(data));
+        res.end(JSON.stringify(result));
       } catch (err) {
         res.writeHead(500, { 'Content-Type': 'application/json', ...cors });
         res.end(JSON.stringify({ __error: err.message }));
@@ -225,7 +160,6 @@ server.listen(PORT, HOST, () => {
   console.log(`\n  Research Digest AI — listening on http://${HOST}:${PORT}  (LLM host model: ${MODEL})\n`);
 });
 
-const shutdown = () => { plugin.kill(); process.exit(0); };
+const shutdown = () => process.exit(0);
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
-process.on('exit', () => plugin.kill());
