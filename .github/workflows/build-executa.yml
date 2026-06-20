@@ -34,6 +34,9 @@ jobs:
           - os: macos-14
             target: node18-macos-arm64
             asset: research-processor-darwin-arm64
+          - os: windows-latest
+            target: node18-win-x64
+            asset: research-processor-windows-x86_64.exe
     steps:
       - uses: actions/checkout@v4
 
@@ -43,6 +46,7 @@ jobs:
 
       - name: Bundle ESM -> single CommonJS file
         working-directory: executas/research-processor-node
+        shell: bash
         run: |
           npx --yes esbuild index.js \
             --bundle --platform=node --format=cjs --target=node18 \
@@ -50,6 +54,7 @@ jobs:
 
       - name: Package standalone binary
         working-directory: executas/research-processor-node
+        shell: bash
         run: |
           npx --yes @yao-pkg/pkg dist/research-processor.cjs \
             --targets ${{ matrix.target }} \
