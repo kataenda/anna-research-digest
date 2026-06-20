@@ -1,4 +1,17 @@
-import { AnnaAppRuntime } from '/static/anna-apps/_sdk/latest/index.js';
+// The Anna runtime occasionally serves a STALE SDK (an old build that throws
+// "token version mismatch" on connect). We load the SDK via a cache-busted dynamic
+// import so each attempt fetches a fresh copy and dodges a cached/edge-stale module.
+// In standalone mode the import map maps the base path to mock-sdk.js, so the
+// cache-busted URL 404s and we fall back to the plain (mapped) import.
+const SDK_URL = '/static/anna-apps/_sdk/latest/index.js';
+async function loadAnnaRuntime() {
+  try {
+    const m = await import(`${SDK_URL}?cb=${Date.now()}`);
+    if (m?.AnnaAppRuntime) return m.AnnaAppRuntime;
+  } catch { /* fall through */ }
+  const m = await import(SDK_URL);
+  return m.AnnaAppRuntime;
+}
 
 // This app "borrows" the Anna runtime: research synthesis uses the host LLM
 // (anna.llm.complete) and the library uses host storage (anna.storage).
@@ -31,7 +44,7 @@ function withTimeout(p, ms, label) {
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
 async function init() {
-  dbg('init — build v0.6-hostllm');
+  dbg('init — build v0.7-cachebust-sdk');
   await connectWithRetry(4);
   setupListeners();
   await loadHistory();
@@ -42,6 +55,7 @@ async function init() {
 async function connectWithRetry(tries) {
   for (let i = 1; i <= tries; i++) {
     try {
+      const AnnaAppRuntime = await loadAnnaRuntime(); // fresh (cache-busted) each attempt
       anna = await AnnaAppRuntime.connect();
       dbg('connected (try ' + i + '): llm=' + !!anna?.llm?.complete + ' storage=' + !!anna?.storage?.get);
       hideError();
